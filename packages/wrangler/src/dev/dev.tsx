@@ -599,6 +599,7 @@ function DevSession(props: DevSessionProps) {
 		props.localUpstream,
 		props.liveReload,
 		props.testScheduled,
+		props.enablePagesAssetsServiceBinding,
 		accountIdDeferred,
 		workerDefinitions,
 	]);
