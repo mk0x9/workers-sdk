@@ -1,6 +1,7 @@
-import { spawn } from "child_process";
+import { readFileSync } from "fs";
 import { writeFile } from "fs/promises";
 import { dirname, resolve } from "path";
+import { Miniflare } from "miniflare";
 import { fetch } from "undici";
 import { logger } from "../../logger";
 import { getBasePath } from "../../paths";
@@ -82,51 +83,31 @@ export async function generate({
 	compatibilityDate: string;
 	compatibilityFlags?: string[];
 }) {
-	const workerdPath = resolve(
-		getBasePath(),
-		"./src/type-generation/runtime/worker/workerd"
-	);
-	const capnpConfigPath = resolve(
-		getBasePath(),
-		"./src/type-generation/runtime/worker/config.capnp"
-	);
+	const workerScript = readFileSync(
+		resolve(
+			getBasePath(),
+			"./src/type-generation/runtime/worker/types-worker.mjs"
+		)
+	).toString();
 
-	logger.log(`Starting workerd on http://localhost:8080`);
-
-	const proc = spawn(workerdPath, ["serve", capnpConfigPath, "--experimental"]);
-
-	proc.on("error", (error) => {
-		logger.error(`Failed to start workerd: ${error.message}.`);
-		throw error;
+	const mf = new Miniflare({
+		modules: true,
+		script: workerScript,
 	});
 
 	const flagsString = compatibilityFlags.length
 		? `+${compatibilityFlags.join("+")}`
 		: "";
 
-	const url = `http://localhost:8080/${compatibilityDate}${flagsString}`;
+	await mf.dispatchFetch(`${compatibilityDate}${flagsString}`);
 
-	let retries = 0;
-	const maxRetries = 1000; // 100 seconds total
-	while (retries < maxRetries) {
-		try {
-			await fetch(url);
-			break;
-		} catch (error) {
-			if (retries === maxRetries - 1) {
-				throw new Error(`Server did not respond after ${maxRetries} attempts`);
-			}
-			await new Promise((res) => setTimeout(res, 100));
-			retries++;
-		}
-	}
+	const url = `http://localhost:8080/${compatibilityDate}${flagsString}`;
 
 	logger.log(`Fetching types from ${url}`);
 	const res = await fetch(url);
 	const content = await res.text();
 
 	logger.log(`Writing types to ${outfilePath}`);
-	await writeFile(outfilePath, content, "utf8");
 
-	proc.kill();
+	await Promise.all([writeFile(outfilePath, content, "utf8"), mf.dispose()]);
 }
