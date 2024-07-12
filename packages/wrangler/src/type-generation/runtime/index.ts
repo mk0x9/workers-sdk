@@ -1,8 +1,8 @@
 import { readFileSync } from "fs";
 import { writeFile } from "fs/promises";
 import { dirname, resolve } from "path";
+import getPort from "get-port";
 import { Miniflare } from "miniflare";
-import { fetch } from "undici";
 import { logger } from "../../logger";
 import { getBasePath } from "../../paths";
 import { ensureDirectoryExists } from "../../utils/log-file";
@@ -84,13 +84,12 @@ export async function generate({
 	compatibilityFlags?: string[];
 }) {
 	const workerScript = readFileSync(
-		resolve(
-			getBasePath(),
-			"./src/type-generation/runtime/worker/types-worker.mjs"
-		)
+		resolve(getBasePath(), "../../../workerd/bazel-bin/types/dist/index.mjs")
 	).toString();
 
 	const mf = new Miniflare({
+		compatibilityDate: "2024-01-01",
+		compatibilityFlags: ["nodejs_compat", "rtti_api"],
 		modules: true,
 		script: workerScript,
 	});
@@ -98,13 +97,10 @@ export async function generate({
 	const flagsString = compatibilityFlags.length
 		? `+${compatibilityFlags.join("+")}`
 		: "";
+	const path = `http://dummy.com/${compatibilityDate}${flagsString}`;
 
-	await mf.dispatchFetch(`${compatibilityDate}${flagsString}`);
-
-	const url = `http://localhost:8080/${compatibilityDate}${flagsString}`;
-
-	logger.log(`Fetching types from ${url}`);
-	const res = await fetch(url);
+	logger.log(`Fetching types from ${path}`);
+	const res = await mf.dispatchFetch(path);
 	const content = await res.text();
 
 	logger.log(`Writing types to ${outfilePath}`);
