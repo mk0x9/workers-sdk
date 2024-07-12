@@ -1,7 +1,6 @@
 import { readFileSync } from "fs";
 import { writeFile } from "fs/promises";
 import { dirname, resolve } from "path";
-import getPort from "get-port";
 import { Miniflare } from "miniflare";
 import { logger } from "../../logger";
 import { getBasePath } from "../../paths";
@@ -11,15 +10,15 @@ import type { Config } from "../../config/config";
 const OUTFILE_RELATIVE_PATH = "./.wrangler/types/runtime.d.ts";
 
 /**
- * Generates runtime types for a Cloudflare Workers project based on the provided project configuration.
+ * Generates runtime types for a Workers project based on the provided project configuration.
  *
  * This function is designed to be isolated and portable, making it easy to integrate into various
- * build processes or development workflows. It handles the entire process of generating runtime
- * types, from ensuring the output directory exists to spawning the workerd process and writing
- * the generated types to a file.
+ * build processes or development workflows. It handles the whole process of generating runtime
+ * types, from ensuring the output directory exists to spawning the workerd process (via Miniflare)
+ * and writing the generated types to a file.
  *
- * @param {string} configPath - The path to the configuration file.
- * @param {Config} config - The parsed configuration object.
+ * @param {string} configPath - The path to the wrangler.toml file.
+ * @param {Config} config - The parsed config object.
  *
  * @throws {Error} If the config file does not have a compatibility date.
  *
@@ -34,16 +33,16 @@ const OUTFILE_RELATIVE_PATH = "./.wrangler/types/runtime.d.ts";
  * // This will generate runtime types and write them to ./.wrangler/types/runtime.d.ts
  *
  * @remarks
- * - This function relies on the `generate` function to perform the actual type generation.
- * - It uses the logger to provide informative output during the process.
  * - The generated types are written to a file specified by OUTFILE_RELATIVE_PATH.
  * - This could be improved by hashing the compat date and flags to avoid unnecessary regeneration.
  */
-export async function generateRuntimeTypes(configPath: string, config: Config) {
-	if (!config.compatibility_date) {
-		throw new Error("Config file must have a compatability date.");
+export async function generateRuntimeTypes(rootPath: string, config: Config) {
+	const { compatibility_date, compatibility_flags } = config;
+
+	if (!compatibility_date) {
+		throw new Error("Config must have a compatability date.");
 	}
-	const configDir = dirname(configPath);
+	const configDir = dirname(rootPath);
 	const outfileRelative = OUTFILE_RELATIVE_PATH;
 	const outfileAbsolute = resolve(configDir, outfileRelative);
 
@@ -52,8 +51,8 @@ export async function generateRuntimeTypes(configPath: string, config: Config) {
 	logger.log("Generating runtime types");
 	await generate({
 		outfilePath: outfileAbsolute,
-		compatibilityDate: config.compatibility_date,
-		compatibilityFlags: config.compatibility_flags,
+		compatibilityDate: compatibility_date,
+		compatibilityFlags: compatibility_flags,
 	});
 	logger.log(`Runtime types generated and written to ${outfileRelative} \n`);
 }
@@ -68,11 +67,6 @@ export async function generateRuntimeTypes(configPath: string, config: Config) {
  * @param {string[]} [options.compatibilityFlags=[]] - Optional compatibility flags.
  *
  * @throws {Error} If the workerd process fails to start or if the server doesn't respond after multiple retries.
- *
- * @remarks
- * - `workerd` path and config file path are hard-coded here, but would be imported from node_modules in a production version.
- * - It implements a retry mechanism to ensure the workerd server is ready before fetching types.
- * - Logging is added throughout the function. A production version would be more judicious about what to log and when. For example, it could choose to return the std output of the workerd process so that the calling function could decide.
  */
 export async function generate({
 	outfilePath,
@@ -99,11 +93,8 @@ export async function generate({
 		: "";
 	const path = `http://dummy.com/${compatibilityDate}${flagsString}`;
 
-	logger.log(`Fetching types from ${path}`);
 	const res = await mf.dispatchFetch(path);
 	const content = await res.text();
-
-	logger.log(`Writing types to ${outfilePath}`);
 
 	await Promise.all([writeFile(outfilePath, content, "utf8"), mf.dispose()]);
 }
