@@ -2,12 +2,12 @@ import { readFileSync } from "fs";
 import { writeFile } from "fs/promises";
 import { dirname, resolve } from "path";
 import { Miniflare } from "miniflare";
-import { logger } from "../../logger";
-import { getBasePath } from "../../paths";
-import { ensureDirectoryExists } from "../../utils/log-file";
-import type { Config } from "../../config/config";
+import { logger } from "../logger";
+import { getBasePath } from "../paths";
+import { ensureDirectoryExists } from "../utils/log-file";
+import type { Config } from "../config/config";
 
-const OUTFILE_RELATIVE_PATH = "./.wrangler/types/runtime.d.ts";
+const DEFAULT_OUTFILE_RELATIVE_PATH = "./.wrangler/types/runtime.d.ts";
 
 /**
  * Generates runtime types for a Workers project based on the provided project configuration.
@@ -17,7 +17,7 @@ const OUTFILE_RELATIVE_PATH = "./.wrangler/types/runtime.d.ts";
  * types, from ensuring the output directory exists to spawning the workerd process (via Miniflare)
  * and writing the generated types to a file.
  *
- * @param {string} configPath - The path to the wrangler.toml file.
+ * @param {string} rootPath - The path to the root of the project.
  * @param {Config} config - The parsed config object.
  *
  * @throws {Error} If the config file does not have a compatibility date.
@@ -28,33 +28,50 @@ const OUTFILE_RELATIVE_PATH = "./.wrangler/types/runtime.d.ts";
  *
  * const configPath = './wrangler.toml';
  * const config = readConfig(configPath);
+ * const outfile = '/Users/me/my-project/dist/runtime.d.ts'
  *
- * await generateRuntimeTypes(configPath, config);
  * // This will generate runtime types and write them to ./.wrangler/types/runtime.d.ts
+ * await generateRuntimeTypes(configPath, config);
+ *
+ * * // This will generate runtime types and write them to /Users/me/my-project/dist/runtime.d.ts
+ * await generateRuntimeTypes(configPath, config, outfile);
  *
  * @remarks
- * - The generated types are written to a file specified by OUTFILE_RELATIVE_PATH.
+ * - The generated types are written to a file specified by DEFAULT_OUTFILE_RELATIVE_PATH.
  * - This could be improved by hashing the compat date and flags to avoid unnecessary regeneration.
  */
-export async function generateRuntimeTypes(rootPath: string, config: Config) {
+export async function generateRuntimeTypes({
+	config,
+	outFile,
+	rootPath,
+}: {
+	config: Config;
+	outFile?: string;
+	rootPath?: string;
+}) {
 	const { compatibility_date, compatibility_flags } = config;
 
 	if (!compatibility_date) {
 		throw new Error("Config must have a compatability date.");
 	}
-	const configDir = dirname(rootPath);
-	const outfileRelative = OUTFILE_RELATIVE_PATH;
-	const outfileAbsolute = resolve(configDir, outfileRelative);
 
-	await ensureDirectoryExists(outfileAbsolute);
+	if (outFile === undefined && rootPath === undefined) {
+		throw new Error("A rootPath must be specified if no outFile is provided");
+	}
+
+	const outFileAbsolute =
+		outFile ??
+		resolve(dirname(rootPath as string), DEFAULT_OUTFILE_RELATIVE_PATH);
+
+	await ensureDirectoryExists(outFileAbsolute);
 
 	logger.log("Generating runtime types");
 	await generate({
-		outfilePath: outfileAbsolute,
+		outfilePath: outFileAbsolute,
 		compatibilityDate: compatibility_date,
 		compatibilityFlags: compatibility_flags,
 	});
-	logger.log(`Runtime types generated and written to ${outfileRelative} \n`);
+	logger.log(`Runtime types generated and written to ${outFileAbsolute} \n`);
 }
 
 /**

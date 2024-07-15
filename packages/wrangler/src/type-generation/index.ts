@@ -30,8 +30,7 @@ export function typesOptions(yargs: CommonYargsArgv) {
 			requiresArg: true,
 		})
 		.option("x-runtime", {
-			type: "boolean",
-			default: false,
+			type: "string",
 			describe: "The outfile for runtime types",
 			demandOption: false,
 		});
@@ -75,8 +74,13 @@ export async function typesHandler(
 
 	const config = readConfig(configPath, args);
 
-	if (args.xRuntime) {
-		await generateRuntimeTypes(configPath, config);
+	// args.xRuntime will be a string if the user passes "--x-runtime" or "--x-runtime=..."
+	if (typeof args.xRuntime === "string") {
+		await generateRuntimeTypes({
+			config,
+			outFile: args.xRuntime || undefined,
+			rootPath: configPath,
+		});
 	}
 
 	const secrets = getVarsForDev(
