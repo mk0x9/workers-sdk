@@ -12,7 +12,6 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
 
-    if: ${{ github.repository_owner == 'cloudflare' }}
     name: Handle Changesets
     runs-on: ubuntu-latest
     steps:

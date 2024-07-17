@@ -10,7 +10,6 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: true
-    if: ${{ github.repository_owner == 'cloudflare' }}
     name: Build & Publish a beta release to NPM
     runs-on: ubuntu-latest
 

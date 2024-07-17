@@ -1011,7 +1011,8 @@ export class Miniflare {
 				/* grace */ 0
 			);
 			server.on("upgrade", this.#handleLoopbackUpgrade);
-			server.listen(0, hostname, () => resolve(server));
+			// set port 9999
+			server.listen(9999, hostname, () => resolve(server));
 		});
 	}
 

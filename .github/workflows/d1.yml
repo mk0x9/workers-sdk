@@ -6,7 +6,6 @@ on:
 
 jobs:
   release:
-    if: ${{ github.repository_owner == 'cloudflare' }}
     name: Release
     runs-on: ubuntu-latest
 
